@@ -1,86 +1,62 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { createChart, ColorType } from "lightweight-charts";
 
-// Candlestick + volume chart from our Binance data, with LIVE updates:
-// initial history via /api/klines, then the forming candle streams in over a
-// Binance kline WebSocket and updates in real time.
+const INTERVAL_MAP: Record<string, string> = {
+  "15m": "15",
+  "1h": "60",
+  "1d": "D",
+  "1w": "W",
+};
+
 export default function Chart({ interval }: { interval: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const tv = INTERVAL_MAP[interval] ?? "D";
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    el.innerHTML = "";
 
-    const intraday = interval === "15m" || interval === "1h";
-    const chart = createChart(el, {
-      autoSize: true,
-      layout: {
-        background: { type: ColorType.Solid, color: "#0d1117" },
-        textColor: "#8b98a8",
-        fontFamily: "ui-monospace, monospace",
-      },
-      grid: {
-        vertLines: { color: "rgba(28,37,48,0.5)" },
-        horzLines: { color: "rgba(28,37,48,0.5)" },
-      },
-      rightPriceScale: { borderColor: "#1c2530" },
-      timeScale: { borderColor: "#1c2530", timeVisible: intraday, rightOffset: 4 },
-      crosshair: { mode: 0 },
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol: "BINANCE:ETHUSDT",
+      interval: tv,
+      timezone: "Asia/Seoul",
+      theme: "dark",
+      style: "1",
+      locale: "kr",
+      backgroundColor: "#0d1117",
+      gridColor: "rgba(28,37,48,0.5)",
+      hide_top_toolbar: false,
+      hide_legend: false,
+      allow_symbol_change: false,
+      save_image: false,
+      calendar: false,
+      hide_volume: false,
+      support_host: "https://www.tradingview.com",
     });
 
-    const candle = chart.addCandlestickSeries({
-      upColor: "#22e06b",
-      downColor: "#ff4d4d",
-      borderVisible: false,
-      wickUpColor: "#22e06b",
-      wickDownColor: "#ff4d4d",
-    });
-    const vol = chart.addHistogramSeries({
-      priceFormat: { type: "volume" },
-      priceScaleId: "",
-    });
-    vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-
-    const greenV = "rgba(34,224,107,0.45)";
-    const redV = "rgba(255,77,77,0.45)";
-
-    let cancelled = false;
-    let ws: WebSocket | undefined;
-
-    fetch(`/api/klines?interval=${interval}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled || d.error) return;
-        candle.setData(d.candles);
-        vol.setData(d.volume);
-        chart.timeScale().fitContent();
-
-        // Live: Binance pushes the forming candle continuously.
-        ws = new WebSocket(`wss://stream.binance.com:9443/ws/ethusdt@kline_${interval}`);
-        ws.onmessage = (e) => {
-          const k = JSON.parse(e.data)?.k;
-          if (!k) return;
-          const time = Math.floor(k.t / 1000);
-          const up = parseFloat(k.c) >= parseFloat(k.o);
-          candle.update({
-            time,
-            open: parseFloat(k.o),
-            high: parseFloat(k.h),
-            low: parseFloat(k.l),
-            close: parseFloat(k.c),
-          } as any);
-          vol.update({ time, value: parseFloat(k.v), color: up ? greenV : redV } as any);
-        };
-      })
-      .catch(() => {});
+    const container = document.createElement("div");
+    container.className = "tradingview-widget-container__widget";
+    container.style.height = "100%";
+    container.style.width = "100%";
+    el.appendChild(container);
+    el.appendChild(script);
 
     return () => {
-      cancelled = true;
-      ws?.close();
-      chart.remove();
+      el.innerHTML = "";
     };
-  }, [interval]);
+  }, [tv]);
 
-  return <div ref={ref} className="chart-box" />;
+  return (
+    <div
+      ref={ref}
+      className="tradingview-widget-container chart-box"
+      style={{ height: "100%", width: "100%" }}
+    />
+  );
 }

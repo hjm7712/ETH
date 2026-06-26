@@ -299,23 +299,41 @@ export default function Page() {
     }
   }
 
-  const marketRows: { label: string; value: string; vote: string }[] = [];
+  const marketRows: { label: string; value: string; vote: string; desc?: string }[] = [];
   if (mkt?.fearGreed)
-    marketRows.push({ label: "FEAR & GREED", value: `${mkt.fearGreed.value} · ${mkt.fearGreed.label}`, vote: mkt.fearGreed.vote });
+    marketRows.push({ label: "FEAR & GREED", value: `${mkt.fearGreed.value} · ${mkt.fearGreed.label}`, vote: mkt.fearGreed.vote, desc: "25↓ 극단공포=BUY · 75↑ 과열=SELL" });
   if (mkt?.funding)
     marketRows.push({
       label: "FUNDING 8H",
       value: `${mkt.funding.ratePct.toFixed(4)}% (${mkt.funding.annualPct >= 0 ? "+" : ""}${mkt.funding.annualPct.toFixed(1)}%/yr)`,
       vote: mkt.funding.vote,
+      desc: "음수 펀딩 = 숏 과열 = 역발상 BUY",
+    });
+  if (mkt?.longShort)
+    marketRows.push({
+      label: "LONG / SHORT",
+      value: `롱 ${mkt.longShort.longPct}% · 숏 ${mkt.longShort.shortPct}% (${mkt.longShort.ratio}x)`,
+      vote: mkt.longShort.vote,
+      desc: "롱 60%↑ 과열=SELL · 45%↓ 숏쏠림=BUY",
     });
   if (mkt?.ethBtc)
     marketRows.push({
       label: "ETH / BTC",
       value: `${mkt.ethBtc.value.toFixed(6)} (${mkt.ethBtc.changePct >= 0 ? "+" : ""}${mkt.ethBtc.changePct.toFixed(2)}%)`,
       vote: mkt.ethBtc.vote,
+      desc: "ETH가 BTC 대비 강세면 알트 강세 신호",
     });
   if (mkt?.btcDom)
-    marketRows.push({ label: "BTC DOMINANCE", value: `${mkt.btcDom.value}%`, vote: mkt.btcDom.vote });
+    marketRows.push({ label: "BTC DOMINANCE", value: `${mkt.btcDom.value}%`, vote: mkt.btcDom.vote, desc: "하락 = 알트로 자금 이동" });
+  if (mkt?.ethDom)
+    marketRows.push({ label: "ETH DOMINANCE", value: `${mkt.ethDom.value}%`, vote: mkt.ethDom.vote, desc: "ETH 시총 비중" });
+  if (mkt?.ssr)
+    marketRows.push({
+      label: "SSR (스테이블 공급비)",
+      value: `${mkt.ssr.value} · 스테이블 $${mkt.ssr.stableMcapB}B`,
+      vote: mkt.ssr.vote,
+      desc: "낮을수록 매수 대기 자금 풍부 → BUY",
+    });
 
   const volDays: any[] = vol?.days ?? [];
   const maxVol = volDays.length ? Math.max(...volDays.map((d) => d.total)) : 1;
@@ -584,12 +602,15 @@ export default function Page() {
         <section className="indicators">
           <div className="label">MARKET REGIME · ON-CHAIN & SENTIMENT</div>
           {marketRows.map((r) => (
-            <div className="row" key={r.label}>
-              <span className="r-label">{r.label}</span>
-              <span className="r-value">{r.value}</span>
-              <span className="r-vote" data-vote={r.vote}>
-                {r.vote}
-              </span>
+            <div key={r.label} style={{ marginBottom: 6 }}>
+              <div className="row">
+                <span className="r-label">{r.label}</span>
+                <span className="r-value">{r.value}</span>
+                <span className="r-vote" data-vote={r.vote}>
+                  {r.vote}
+                </span>
+              </div>
+              {r.desc && <div className="muted" style={{ padding: "0 0 2px 0", fontSize: 11 }}>{r.desc}</div>}
             </div>
           ))}
           <div className="row">
