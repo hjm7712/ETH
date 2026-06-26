@@ -163,7 +163,6 @@ export default function Page() {
       const saved = localStorage.getItem(LAYOUT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // 저장된 레이아웃이 있으면 lg만 복원 (크기/위치 유지)
         setLayouts((prev: any) => ({ ...prev, ...parsed }));
       }
     } catch {
