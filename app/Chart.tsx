@@ -2,9 +2,6 @@
 import { useEffect, useRef } from "react";
 import { createChart, ColorType } from "lightweight-charts";
 
-// Candlestick + volume chart from our Binance data, with LIVE updates:
-// initial history via /api/klines, then the forming candle streams in over a
-// Binance kline WebSocket and updates in real time.
 export default function Chart({ interval }: { interval: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -47,16 +44,24 @@ export default function Chart({ interval }: { interval: string }) {
 
     let cancelled = false;
     let ws: WebSocket | undefined;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-    fetch(`/api/klines?interval=${interval}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled || d.error) return;
-        candle.setData(d.candles);
-        vol.setData(d.volume);
-        chart.timeScale().fitContent();
+    const loadHistory = () =>
+      fetch(`/api/klines?interval=${interval}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled || d.error) return;
+          candle.setData(d.candles);
+          vol.setData(d.volume);
+          chart.timeScale().fitContent();
+        })
+        .catch(() => {});
 
-        // Live: Binance pushes the forming candle continuously.
+    loadHistory().then(() => {
+      if (cancelled) return;
+
+      // 브라우저 → Binance 직접 WebSocket (한국 IP에서 접속 시 실시간 동작)
+      try {
         ws = new WebSocket(`wss://stream.binance.com:9443/ws/ethusdt@kline_${interval}`);
         ws.onmessage = (e) => {
           const k = JSON.parse(e.data)?.k;
@@ -72,12 +77,22 @@ export default function Chart({ interval }: { interval: string }) {
           } as any);
           vol.update({ time, value: parseFloat(k.v), color: up ? greenV : redV } as any);
         };
-      })
-      .catch(() => {});
+        ws.onerror = () => {
+          // WebSocket 실패 시 폴링으로 폴백
+          ws?.close();
+          const POLL_MS = interval === "15m" ? 15000 : interval === "1h" ? 30000 : 60000;
+          pollTimer = setInterval(loadHistory, POLL_MS);
+        };
+      } catch {
+        const POLL_MS = interval === "15m" ? 15000 : interval === "1h" ? 30000 : 60000;
+        pollTimer = setInterval(loadHistory, POLL_MS);
+      }
+    });
 
     return () => {
       cancelled = true;
       ws?.close();
+      clearInterval(pollTimer);
       chart.remove();
     };
   }, [interval]);
